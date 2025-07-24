@@ -5,6 +5,7 @@ env:
     IMAGE_TAG: "latest"
     AWS_REGION: "us-east-1"
     ECR_REPO_NAME: "my-backend-repo"
+    CONTAINER_NAME: "backend-repo123"
 
 phases:
   install:
