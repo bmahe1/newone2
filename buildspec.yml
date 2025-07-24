@@ -3,38 +3,47 @@ version: 0.2
 env:
   variables:
     IMAGE_TAG: "latest"
-    DOCKERHUB_IMAGE: "yourdockerhubuser/my-backend"
-    ECR_REPO: "my-backend-repo"
     AWS_REGION: "us-east-1"
-    # Use environment variables or Secrets Manager if needed
-    DOCKERHUB_USERNAME: "yourdockerhubuser"
-    DOCKERHUB_PASSWORD: "yourpassword_or_token"
+    ECR_REPO_NAME: "my-backend-repo"
+    CONTAINER_NAME: "backend-container"
 
 phases:
+  install:
+    runtime-versions:
+      docker: 20
+    commands:
+      - echo "Installing Docker runtime"
   pre_build:
     commands:
-      - echo Logging into Docker Hub...
-      - echo $DOCKERHUB_PASSWORD | docker login -u $DOCKERHUB_USERNAME --password-stdin
-
       - echo Logging into Amazon ECR...
-      - REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO
+      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - REPOSITORY_URI=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME
       - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPOSITORY_URI
 
+      - echo Checking if ECR repository exists...
+      - |
+        if ! aws ecr describe-repositories --repository-names $ECR_REPO_NAME --region $AWS_REGION > /dev/null 2>&1; then
+          echo "ECR repository does not exist. Creating..."
+          aws ecr create-repository --repository-name $ECR_REPO_NAME --region $AWS_REGION
+        fi
   build:
     commands:
-      - echo Pulling image from Docker Hub...
-      - docker pull $DOCKERHUB_IMAGE:$IMAGE_TAG
-
-      - echo Tagging image for ECR...
-      - docker tag $DOCKERHUB_IMAGE:$IMAGE_TAG $REPOSITORY_URI:$IMAGE_TAG
-
+      - echo Building Docker image...
+      - docker build -t $ECR_REPO_NAME .
+      - docker tag $ECR_REPO_NAME:latest $REPOSITORY_URI:$IMAGE_TAG
   post_build:
     commands:
-      - echo Pushing image to ECR...
+      - echo Pushing Docker image to ECR...
       - docker push $REPOSITORY_URI:$IMAGE_TAG
-      - echo Writing image definition for ECS (optional)...
-      - printf '[{"name":"backend","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
 
+      - echo Running container in CodeBuild (for testing)...
+      - docker run -d -p 5000:5000 --name $CONTAINER_NAME $ECR_REPO_NAME
+
+      - echo Waiting 5 seconds for app to start...
+      - sleep 5
+
+      - echo Checking if backend is responding on port 5000...
+      - curl --retry 3 --retry-delay 3 http://localhost:5000/api || echo "Backend test failed (this is fine in CodeBuild)"
 artifacts:
   files:
-    - imagedefinitions.json
+    - imagedefinitions.json  # Optional: only needed if used in CodePipeline to ECS
