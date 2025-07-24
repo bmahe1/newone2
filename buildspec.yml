@@ -1,41 +1,25 @@
 version: 0.2
-
 env:
   variables:
-    IMAGE_TAG: "latest"
-    AWS_REGION: "us-east-1"
-    ECR_REPO_NAME: "my-backend-repo"
-    CONTAINER_NAME: "backend-repo123"
+    IMAGE_TAG: latest
+    AWS_REGION: us-east-1
+    ECR_REPO_NAME: my-backend-repo
 
 phases:
-  install:
-    commands:
-      - echo "Preparing for Docker build..."
-
   pre_build:
     commands:
-      - echo Logging into Amazon ECR...
       - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-      - REPOSITORY_URI=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME
-      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPOSITORY_URI
-
-      - echo Checking if ECR repository exists...
-      - |
-        if ! aws ecr describe-repositories --repository-names $ECR_REPO_NAME --region $AWS_REGION > /dev/null 2>&1; then
-          echo "ECR repository does not exist. Creating..."
-          aws ecr create-repository --repository-name $ECR_REPO_NAME --region $AWS_REGION
-        fi
-
+      - REPO_URI=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPO_URI
   build:
     commands:
-      - echo Building Docker image...
       - docker build -t $ECR_REPO_NAME .
-      - docker tag $ECR_REPO_NAME:latest $REPOSITORY_URI:$IMAGE_TAG
-
+      - docker tag $ECR_REPO_NAME:latest $REPO_URI:$IMAGE_TAG
   post_build:
     commands:
-      - echo Pushing Docker image to ECR...
-      - docker push $REPOSITORY_URI:$IMAGE_TAG
-      - echo Build and push completed.
+      - docker push $REPO_URI:$IMAGE_TAG
+      - printf '[{"name":"my-backend","imageUri":"%s"}]' $REPO_URI:$IMAGE_TAG > imagedefinitions.json
 
-
+artifacts:
+  files:
+    - imagedefinitions.json
