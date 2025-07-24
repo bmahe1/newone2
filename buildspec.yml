@@ -38,6 +38,4 @@ phases:
       - docker push $REPOSITORY_URI:$IMAGE_TAG
       - echo Build and push completed.
 
-artifacts:
-  files:
-    - imagedefinitions.json  # Only required if using ECS with CodePipeline (optional)
+
