@@ -8,11 +8,10 @@ env:
     CONTAINER_NAME: "backend-container"
 
 phases:
-  install:
-    runtime-versions:
-      docker: 20
-    commands:
-      - echo "Installing Docker runtime"
+ install:
+  commands:
+    - echo "Preparing for Docker build"
+
   pre_build:
     commands:
       - echo Logging into Amazon ECR...
